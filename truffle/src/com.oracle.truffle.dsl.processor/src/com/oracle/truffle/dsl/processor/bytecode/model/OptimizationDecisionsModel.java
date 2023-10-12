@@ -38,46 +38,39 @@
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
  * SOFTWARE.
  */
-package com.oracle.truffle.dsl.processor.generator;
+package com.oracle.truffle.dsl.processor.bytecode.model;
 
+import java.util.ArrayList;
 import java.util.List;
 
-import javax.lang.model.element.VariableElement;
+public class OptimizationDecisionsModel implements PrettyPrintable {
 
-import com.oracle.truffle.dsl.processor.generator.FlatNodeGenFactory.ChildExecutionResult;
-import com.oracle.truffle.dsl.processor.generator.FlatNodeGenFactory.FrameState;
-import com.oracle.truffle.dsl.processor.generator.FlatNodeGenFactory.LocalVariable;
-import com.oracle.truffle.dsl.processor.java.model.CodeTree;
-import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
-import com.oracle.truffle.dsl.processor.model.NodeChildData;
-import com.oracle.truffle.dsl.processor.model.NodeExecutionData;
-
-/**
- * Interface that allows node generators to customize the way {@link FlatNodeGenFactory} generates
- * nodes. A node generator (e.g., {@link BytecodeDSLNodeFactory}) can pass its own implementation of
- * this interface to the {@link FlatNodeGenFactory} during construction, and the factory will
- * delegate to it.
- */
-public interface NodeGeneratorPlugs {
-    NodeGeneratorPlugs DEFAULT = new NodeGeneratorPlugs() {
-    };
-
-    default List<? extends VariableElement> additionalArguments() {
-        return List.of();
+    public static class QuickenDecision {
+        public String id;
+        public String operation;
+        public String[] specializations;
     }
 
-    default ChildExecutionResult createExecuteChild(FlatNodeGenFactory factory, CodeTreeBuilder builder, FrameState originalFrameState, FrameState frameState, NodeExecutionData execution,
-                    LocalVariable targetValue) {
-        return factory.createExecuteChild(builder, originalFrameState, frameState, execution, targetValue);
+    public static class SuperInstructionDecision {
+        public String id;
+        public String[] instructions;
     }
 
-    default void createNodeChildReferenceForException(FlatNodeGenFactory flatNodeGenFactory, FrameState frameState, CodeTreeBuilder builder, List<CodeTree> values, NodeExecutionData execution,
-                    NodeChildData child, LocalVariable var) {
-        flatNodeGenFactory.createNodeChildReferenceForException(frameState, builder, values, execution, child, var);
+    public static class CommonInstructionDecision {
+        public String id;
+        public String instruction;
     }
 
-    default CodeTree createTransferToInterpreterAndInvalidate() {
-        return GeneratorUtils.createTransferToInterpreterAndInvalidate();
-    }
+    public String decisionsFilePath;
+    public String[] decisionsOverrideFilePaths;
+    public List<QuickenDecision> quickenDecisions = new ArrayList<>();
+    public List<SuperInstructionDecision> superInstructionDecisions = new ArrayList<>();
+    public List<CommonInstructionDecision> commonInstructionDecisions = new ArrayList<>();
 
+    @Override
+    public void pp(PrettyPrinter printer) {
+        printer.field("quickens", quickenDecisions);
+        printer.field("superInstructions", superInstructionDecisions);
+        printer.field("commonInstructions", commonInstructionDecisions);
+    }
 }

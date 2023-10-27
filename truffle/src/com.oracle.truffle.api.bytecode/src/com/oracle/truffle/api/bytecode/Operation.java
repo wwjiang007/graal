@@ -45,7 +45,7 @@ import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
-import com.oracle.truffle.api.dsl.Fallback;
+import com.oracle.truffle.api.instrumentation.Tag;
 
 /**
  * Declares an operation. An operation serves as a specification for a bytecode instruction in the
@@ -74,4 +74,7 @@ import com.oracle.truffle.api.dsl.Fallback;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ElementType.TYPE})
 public @interface Operation {
+
+    Class<? extends Tag>[] tags() default {};
+
 }

@@ -40,9 +40,12 @@
  */
 package com.oracle.truffle.dsl.processor.generator;
 
+import static com.oracle.truffle.dsl.processor.java.ElementUtils.isPrimitive;
+
 import java.util.List;
 
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.TypeMirror;
 
 import com.oracle.truffle.dsl.processor.bytecode.generator.BytecodeDSLNodeFactory;
 import com.oracle.truffle.dsl.processor.generator.FlatNodeGenFactory.ChildExecutionResult;
@@ -52,6 +55,7 @@ import com.oracle.truffle.dsl.processor.java.model.CodeTree;
 import com.oracle.truffle.dsl.processor.java.model.CodeTreeBuilder;
 import com.oracle.truffle.dsl.processor.model.NodeChildData;
 import com.oracle.truffle.dsl.processor.model.NodeExecutionData;
+import com.oracle.truffle.dsl.processor.model.SpecializationData;
 
 /**
  * Interface that allows node generators to customize the way {@link FlatNodeGenFactory} generates
@@ -72,6 +76,13 @@ public interface NodeGeneratorPlugs {
         return factory.createExecuteChild(builder, originalFrameState, frameState, execution, targetValue);
     }
 
+    default boolean canBoxingEliminateType(NodeExecutionData currentExecution, TypeMirror type) {
+        if (!isPrimitive(type)) {
+            return false;
+        }
+        return currentExecution.getChild().findExecutableType(type) != null;
+    }
+
     default void createNodeChildReferenceForException(FlatNodeGenFactory flatNodeGenFactory, FrameState frameState, CodeTreeBuilder builder, List<CodeTree> values, NodeExecutionData execution,
                     NodeChildData child, LocalVariable var) {
         flatNodeGenFactory.createNodeChildReferenceForException(frameState, builder, values, execution, child, var);
@@ -82,11 +93,8 @@ public interface NodeGeneratorPlugs {
     }
 
     @SuppressWarnings("unused")
-    default void createSlowPathBegin(FlatNodeGenFactory nodeFactory, CodeTreeBuilder builder, FrameState frameState) {
-    }
+    default void notifySpecialize(FlatNodeGenFactory nodeFactory, CodeTreeBuilder builder, FrameState frameState, SpecializationData specialization) {
 
-    @SuppressWarnings("unused")
-    default void createSlowPathEnd(FlatNodeGenFactory nodeFactory, CodeTreeBuilder builder, FrameState frameState) {
     }
 
 }

@@ -27,13 +27,16 @@ package com.oracle.svm.core.jdk.localization;
 
 import static com.oracle.svm.util.StringUtil.toDotSeparated;
 import static com.oracle.svm.util.StringUtil.toSlashSeparated;
+import static sun.util.locale.provider.LocaleProviderAdapter.Type.CLDR;
 
 import java.lang.reflect.Constructor;
 import java.nio.charset.Charset;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.IllformedLocaleException;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
@@ -43,6 +46,7 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import org.graalvm.collections.EconomicMap;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
@@ -55,8 +59,11 @@ import com.oracle.svm.core.ClassLoaderSupport;
 import com.oracle.svm.core.SubstrateUtil;
 import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.util.VMError;
+import com.oracle.svm.util.ReflectionUtil;
 
 import jdk.graal.compiler.debug.GraalError;
+import sun.util.locale.provider.LocaleProviderAdapter;
+import sun.util.locale.provider.ResourceBundleBasedAdapter;
 import sun.util.resources.Bundles;
 
 /**
@@ -78,6 +85,8 @@ public class LocalizationSupport {
     public final ResourceBundle.Control control = ResourceBundle.Control.getControl(ResourceBundle.Control.FORMAT_DEFAULT);
 
     public final Charset defaultCharset;
+
+    private final EconomicMap<String, Set<Locale>> registeredBundles = EconomicMap.create();
 
     public LocalizationSupport(Locale defaultLocale, Set<Locale> locales, Charset defaultCharset) {
         this.defaultLocale = defaultLocale;
@@ -186,16 +195,32 @@ public class LocalizationSupport {
         }
     }
 
-    private void registerRequiredReflectionAndResourcesForBundleAndLocale(String baseName, Locale baseLocale) {
-        for (Locale locale : control.getCandidateLocales(baseName, baseLocale)) {
+    public void registerRequiredReflectionAndResourcesForBundleAndLocale(String baseName, Locale baseLocale) {
+        /*
+         * Bundles in the sun.(text|util).resources.cldr packages are loaded with an alternative
+         * strategy which tries parent aliases defined in CLDRBaseLocaleDataMetaInfo.parentLocales.
+         */
+        List<Locale> candidateLocales = isCLDRBundle(baseName)
+                        ? ((ResourceBundleBasedAdapter) LocaleProviderAdapter.forType(CLDR)).getCandidateLocales(baseName, baseLocale)
+                        : control.getCandidateLocales(baseName, baseLocale);
+
+        for (Locale locale : candidateLocales) {
             String bundleWithLocale = control.toBundleName(baseName, locale);
             RuntimeReflection.registerClassLookup(bundleWithLocale);
+            Class<?> bundleClass = ReflectionUtil.lookupClass(true, bundleWithLocale);
+            if (bundleClass != null) {
+                registerNullaryConstructor(bundleClass);
+            }
             Resources.singleton().registerNegativeQuery(bundleWithLocale.replace('.', '/') + ".properties");
             String otherBundleName = Bundles.toOtherBundleName(baseName, bundleWithLocale, locale);
             if (!otherBundleName.equals(bundleWithLocale)) {
                 RuntimeReflection.registerClassLookup(otherBundleName);
             }
         }
+    }
+
+    private boolean isCLDRBundle(String baseName) {
+        return baseName.startsWith(CLDR.getUtilResourcesPackage()) || baseName.startsWith(CLDR.getTextResourcesPackage());
     }
 
     /**
@@ -272,5 +297,27 @@ public class LocalizationSupport {
             return;
         }
         RuntimeReflection.register(nullaryConstructor);
+    }
+
+    @Platforms(Platform.HOSTED_ONLY.class)
+    public void registerBundleLookup(String baseName, Locale locale) {
+        registeredBundles.putIfAbsent(baseName, new HashSet<>());
+        registeredBundles.get(baseName).add(locale);
+    }
+
+    public boolean isRegisteredBundleLookup(String baseName, Locale locale, Object controlOrStrategy) {
+        if (baseName == null || locale == null || controlOrStrategy == null) {
+            /* Those cases will throw a NullPointerException before any lookup */
+            return true;
+        }
+        if (registeredBundles.get(baseName, Collections.emptySet()).contains(locale)) {
+            return true;
+        }
+        /*
+         * We cannot guarantee whether non-canonicalizable locales were present in the
+         * configuration, so we do not throw in that case. The exception thrown when handling the
+         * locale will be enough for debugging.
+         */
+        return !Locale.forLanguageTag(locale.toLanguageTag()).equals(locale);
     }
 }

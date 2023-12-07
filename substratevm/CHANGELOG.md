@@ -18,6 +18,7 @@ This changelog summarizes major changes to GraalVM Native Image.
 * (GR-30433) Disallow the deprecated environment variable USE_NATIVE_IMAGE_JAVA_PLATFORM_MODULE_SYSTEM=false.
 * (GR-49655) Experimental support for parts of the [Foreign Function & Memory API](https://github.com/oracle/graal/blob/master/docs/reference-manual/native-image/ForeignInterface.md) (part of "Project Panama", [JEP 454](https://openjdk.org/jeps/454)) on AMD64. Must be enabled with `-H:+ForeignAPISupport` (requiring `-H:+UnlockExperimentalVMOptions`).
 * (GR-46407) Correctly rethrow build-time linkage errors at run-time for registered reflection queries.
+* (GR-50529) Native Image now throws a specific error when trying to access unregistered resource bundles instead of failing on a subsequent reflection or resource query.
 
 ## GraalVM for JDK 21 (Internal Version 23.1.0)
 * (GR-35746) Lower the default aligned chunk size from 1 MB to 512 KB for the serial and epsilon GCs, reducing memory usage and image size in many cases.

@@ -64,14 +64,12 @@ import org.graalvm.collections.Pair;
 import org.graalvm.nativeimage.ImageSingletons;
 import org.graalvm.nativeimage.Platform;
 import org.graalvm.nativeimage.Platforms;
-import org.graalvm.nativeimage.hosted.RuntimeReflection;
 import org.graalvm.nativeimage.impl.RuntimeClassInitializationSupport;
 
 import com.oracle.svm.core.ClassLoaderSupport;
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.feature.AutomaticallyRegisteredFeature;
 import com.oracle.svm.core.feature.InternalFeature;
-import com.oracle.svm.core.jdk.Resources;
 import com.oracle.svm.core.jdk.localization.BundleContentSubstitutedLocalizationSupport;
 import com.oracle.svm.core.jdk.localization.LocalizationSupport;
 import com.oracle.svm.core.jdk.localization.OptimizedLocalizationSupport;
@@ -100,7 +98,6 @@ import sun.util.cldr.CLDRLocaleProviderAdapter;
 import sun.util.locale.LocaleObjectCache;
 import sun.util.locale.provider.LocaleProviderAdapter;
 import sun.util.locale.provider.ResourceBundleBasedAdapter;
-import sun.util.resources.Bundles;
 import sun.util.resources.LocaleData;
 import sun.util.resources.ParallelListResourceBundle;
 
@@ -506,6 +503,11 @@ public class LocalizationFeature implements InternalFeature {
                                     try {
                                         bundle = localeDataBundleGetter.apply(localeData, locale);
                                     } catch (MissingResourceException e) {
+                                        /*
+                                         * Locale data bundle class names do not contain underscores
+                                         */
+                                        String baseName = e.getClassName().split("_")[0];
+                                        prepareNegativeBundle(baseName, locale);
                                         continue; /* No bundle for this `locale`. */
                                     }
                                     if (bundle instanceof ParallelListResourceBundle) {
@@ -578,10 +580,6 @@ public class LocalizationFeature implements InternalFeature {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     public void prepareBundle(String baseName, Collection<Locale> wantedLocales) {
-        if (baseName.isEmpty()) {
-            return;
-        }
-
         prepareBundleInternal(baseName, wantedLocales);
 
         String alternativeBundleName = null;
@@ -599,6 +597,7 @@ public class LocalizationFeature implements InternalFeature {
     private void prepareBundleInternal(String baseName, Collection<Locale> wantedLocales) {
         boolean somethingFound = false;
         for (Locale locale : wantedLocales) {
+            support.registerBundleLookup(baseName, locale);
             List<ResourceBundle> resourceBundle;
             try {
                 resourceBundle = ImageSingletons.lookup(ClassLoaderSupport.class).getResourceBundle(baseName, locale);
@@ -653,18 +652,15 @@ public class LocalizationFeature implements InternalFeature {
 
     @Platforms(Platform.HOSTED_ONLY.class)
     protected void prepareNegativeBundle(String baseName, Locale locale) {
-        String bundleName = support.control.toBundleName(baseName, locale);
-        RuntimeReflection.registerClassLookup(bundleName);
-        Resources.singleton().registerNegativeQuery(support.getResultingPattern(baseName, locale) + ".properties");
-        String otherBundleName = Bundles.toOtherBundleName(baseName, bundleName, locale);
-        if (!otherBundleName.equals(bundleName)) {
-            RuntimeReflection.registerClassLookup(otherBundleName);
-        }
+        support.registerBundleLookup(baseName, locale);
+        support.registerRequiredReflectionAndResourcesForBundleAndLocale(baseName, locale);
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)
     protected void prepareBundle(ResourceBundle bundle, Locale locale) {
-        prepareBundle(bundle.getBaseBundleName(), bundle, locale);
+        String baseName = bundle.getBaseBundleName();
+        support.registerBundleLookup(baseName, locale);
+        prepareBundle(baseName, bundle, locale);
     }
 
     @Platforms(Platform.HOSTED_ONLY.class)

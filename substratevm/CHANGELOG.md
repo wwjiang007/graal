@@ -2,6 +2,9 @@
 
 This changelog summarizes major changes to GraalVM Native Image.
 
+## GraalVM for JDK 23 (Internal Version 24.1.0)
+* (GR-51053) Native Image now uses `vswhere` to find Visual Studio installations in non-standard locations.
+
 ## GraalVM for JDK 22 (Internal Version 24.0.0)
 * (GR-48304) Red Hat added support for the JFR event ThreadAllocationStatistics.
 * (GR-48343) Red Hat added support for the JFR events AllocationRequiringGC and SystemGC.
